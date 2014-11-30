@@ -6,7 +6,7 @@ from collections import namedtuple, OrderedDict
 import win32gui
 from time import sleep
 
-def dhash(image, hash_size=8):
+def dhash(image, hash_size=64):
     # Grayscale and shrink the image.
     image = image.convert('L').resize(
         (hash_size + 1, hash_size),
@@ -74,7 +74,7 @@ def dedupe_images(capture_path, dedupe_path):
         if 'sgtemp' in f:
             os.remove(capture_path + '\\' + f)
 
-if __name__ == '__main__':
+def capture_frames(capture_directory):
     toplist, winlist = [], []
     def enum_cb(hwnd, results):
         winlist.append((hwnd, win32gui.GetWindowText(hwnd)))
@@ -87,21 +87,44 @@ if __name__ == '__main__':
     bbox = win32gui.GetWindowRect(hwnd)
     spritebox = (bbox[0]+137, bbox[1]+40, bbox[0]+201, bbox[1]+104)
     sleep(0.05)
-    capture_directory = os.getcwd() + "\\capture"
-    if not os.path.exists(capture_directory):
-        os.makedirs(capture_directory)
-    print("Capturing 5000 Frames, unfocus the window to stop early.")
     frames = []
     i = 0
     while i < 5000:
         if win32gui.GetForegroundWindow() == hwnd:
             img = ImageGrab.grab(spritebox)
             img.save(capture_directory + "\\sgtemp" + str(i).zfill(4) + ".png")
-            sleep(0.025)
         else:
             break
         i = i + 1
+
+def stripbg(capture_path):
+    img_paths = []
+    for f in os.listdir(capture_path):
+        if f.endswith('.png'):
+            img_paths.append(capture_path + '\\' + f)
+    for img_path in img_paths:
+        try:
+            img = Image.open(img_path)
+            img = img.convert("RGBA")
+            pixdata = img.load()
+            for y in xrange(img.size[1]):
+                for x in xrange(img.size[0]):
+                    if pixdata[x, y] == (248, 0, 248, 255):
+                        pixdata[x, y] = (0, 0, 0, 0)
+            img.save(img_path)
+        except IOError as e:
+            logging.warning(e.message)
+            continue
+
+if __name__ == '__main__':
+    capture_directory = os.getcwd() + "\\capture"
+    if not os.path.exists(capture_directory):
+        os.makedirs(capture_directory)
+    print("Capturing 5000 Frames, unfocus the window to stop early.")
+    capture_frames(capture_directory)
     print("Frames Captured")
+    print("Stripping Backgrounds")
+    stripbg(capture_directory)
     print("Deduping")
     dedupe_directory = os.getcwd() + "\\complete"
     if not os.path.exists(dedupe_directory):
